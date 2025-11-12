@@ -2,9 +2,9 @@
 package com.viet.data.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.viet.data.dto.AnalysisRequestDTO;
-import com.viet.data.dto.AnalysisResultDTO;
-import com.viet.data.dto.RecommendationDTO;
+import com.viet.data.dtos.AnalysisRequestDTO;
+import com.viet.data.dtos.AnalysisResultDTO;
+import com.viet.data.dtos.RecommendationDTO;
 import com.viet.data.entity.AnalysisResult;
 import com.viet.data.entity.Recommendation;
 import com.viet.data.repository.StockDataRepository;

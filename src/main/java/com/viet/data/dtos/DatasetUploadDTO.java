@@ -1,4 +1,4 @@
-package com.viet.data.dto;
+package com.viet.data.dtos;
 
 import org.springframework.web.multipart.MultipartFile;
 

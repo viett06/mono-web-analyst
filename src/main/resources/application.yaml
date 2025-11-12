@@ -20,7 +20,10 @@ spring:
     multipart:
       max-file-size: 10MB
       max-request-size: 10MB
-
+jwt:
+  signerKey: "nUfJ0IIEZWvOFqlud2hLrdVgGkYLYNH6JR6NkF6bAMq+yhdoQrah87JcbUsnXzQ4"
+  valid-duration: 3600 #in second
+  refreshable-duration: 36000 # in second
 # ========================
 # Server Configuration
 # ========================

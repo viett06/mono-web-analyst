@@ -1,12 +1,13 @@
 package com.viet.data.controller;
 
-import com.viet.data.dto.DatasetUploadDTO;
+import com.viet.data.dtos.DatasetUploadDTO;
 import com.viet.data.entity.Dataset;
 import com.viet.data.entity.User;
 import com.viet.data.services.DatasetService;
 import com.viet.data.services.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,10 +29,8 @@ public class DatasetController {
     public ResponseEntity<?> uploadDataset(@ModelAttribute DatasetUploadDTO uploadDTO) {
         try {
             // TODO: Get current user from authentication
-            // For now, using a demo user
-            User user = userService.findByUsername("demo").orElseGet(() ->
-                    userService.createUser("demo", "demo@example.com", "password")
-            );
+            // For now
+           User user = userService.findUser();
 
             Dataset dataset = datasetService.uploadDataset(user, uploadDTO.getName(), uploadDTO.getFile());
             return ResponseEntity.ok(dataset);
