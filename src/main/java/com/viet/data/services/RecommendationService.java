@@ -5,9 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viet.data.entity.AnalysisResult;
 import com.viet.data.entity.Dataset;
 import com.viet.data.entity.Recommendation;
+import com.viet.data.entity.User;
+import com.viet.data.exception.AppException;
+import com.viet.data.exception.ErrorCode;
 import com.viet.data.repository.AnalysisResultRepository;
+import com.viet.data.repository.DatasetRepository;
 import com.viet.data.repository.RecommendationRepository;
+import com.viet.data.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -26,11 +33,34 @@ public class RecommendationService {
     private RecommendationRepository recommendationRepository;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private DatasetRepository datasetRepository;
 
-    public Recommendation generateRecommendation(Long datasetId, String symbol) {
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private UserRepository userRepository;
+
+    // Kiểm tra quyền truy cập dataset
+    private void validateDatasetAccess( Long datasetId) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new AppException(ErrorCode.DATASET_NOT_FOUND));
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = userRepository.findByUsername(authentication.getName()).orElseThrow(()->new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        if (!dataset.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+    }
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public Recommendation generateRecommendation( Long datasetId, String symbol) {
+        validateDatasetAccess(datasetId);
+
         List<AnalysisResult> latestResults = analysisResultRepository
                 .findLatestAnalysisResults(datasetId, symbol);
+
+        if (latestResults.isEmpty()) {
+            throw new AppException(ErrorCode.NO_ANALYSIS_RESULTS);
+        }
 
         Map<String, Integer> signalCounts = new HashMap<>();
         Map<String, Object> analysisSummary = new HashMap<>();
@@ -72,7 +102,13 @@ public class RecommendationService {
 
         return recommendationRepository.save(recommendation);
     }
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public List<Recommendation> getUserRecommendations( Long datasetId) {
+        validateDatasetAccess( datasetId);
+        return recommendationRepository.findByDatasetId(datasetId);
+    }
 
+    // Các phương thức private giữ nguyên...
     private String determineFinalRecommendation(Map<String, Integer> signalCounts) {
         int buyCount = signalCounts.getOrDefault("BUY", 0);
         int sellCount = signalCounts.getOrDefault("SELL", 0);

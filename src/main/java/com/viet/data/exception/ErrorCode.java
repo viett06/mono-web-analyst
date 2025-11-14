@@ -13,6 +13,14 @@ public enum ErrorCode {
     UNCATEGORIZED_EXCEPTION(9999, "Uncategorized error", HttpStatus.INTERNAL_SERVER_ERROR),
     INVALID_KEY(1003, "Uncategorized error", HttpStatus.BAD_REQUEST),
     USER_EXISTED(1004, "User existed", HttpStatus.BAD_REQUEST),
+    DATASET_NOT_FOUND(4004, "Dataset not found",HttpStatus.NOT_FOUND),
+    ACCESS_DENIED(4003, "Access denied",HttpStatus.UNAUTHORIZED),
+    NO_DATA_FOUND(4005, "No data found for analysis",HttpStatus.NOT_FOUND),
+    INSUFFICIENT_DATA(4006, "Insufficient data for analysis", HttpStatus.BAD_REQUEST),
+    NO_ANALYSIS_RESULTS(4007, "No analysis results found",HttpStatus.BAD_REQUEST);
+
+
+
     ;
     private int code;
     private String message;

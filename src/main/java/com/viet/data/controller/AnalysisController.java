@@ -1,24 +1,17 @@
-
 package com.viet.data.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.viet.data.dtos.AnalysisRequestDTO;
-import com.viet.data.dtos.AnalysisResultDTO;
-import com.viet.data.dtos.RecommendationDTO;
+import com.viet.data.dtos.response.ApiResponse;
 import com.viet.data.entity.AnalysisResult;
-import com.viet.data.entity.Recommendation;
-import com.viet.data.repository.StockDataRepository;
 import com.viet.data.services.FinancialAnalysisService;
-import com.viet.data.services.RecommendationService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/analysis")
 @CrossOrigin(origins = "${cors.allowed-origins}")
@@ -27,115 +20,144 @@ public class AnalysisController {
     @Autowired
     private FinancialAnalysisService financialAnalysisService;
 
-    @Autowired
-    private RecommendationService recommendationService;
-
-    @Autowired
-    private StockDataRepository stockDataRepository;
-
-    @PostMapping("/run")
-    public ResponseEntity<?> runAnalysis(@RequestBody AnalysisRequestDTO request) {
-        try {
-            List<AnalysisResult> results = runRequestedAnalyses(request);
-            List<AnalysisResultDTO> resultDTOs = convertToDTOs(results);
-
-            return ResponseEntity.ok(Map.of(
-                    "analysisResults", resultDTOs,
-                    "message", "Analysis completed successfully"
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @PostMapping("/recommendation")
-    public ResponseEntity<RecommendationDTO> generateRecommendation(@RequestBody AnalysisRequestDTO request) {
-        Recommendation recommendation = recommendationService.generateRecommendation(
-                request.getDatasetId(), request.getSymbol()
-        );
-        RecommendationDTO dto = convertToDTO(recommendation);
-        return ResponseEntity.ok(dto);
-    }
-
-    @GetMapping("/symbols/{datasetId}")
-    public ResponseEntity<List<String>> getAvailableSymbols(@PathVariable Long datasetId) {
-        List<String> symbols = stockDataRepository.findDistinctSymbolsByDatasetId(datasetId);
-        return ResponseEntity.ok(symbols);
-    }
-
-    @GetMapping("/results/{datasetId}/{symbol}")
-    public ResponseEntity<List<AnalysisResultDTO>> getAnalysisResults(
+    @GetMapping("/{datasetId}/results")
+    public ApiResponse<List<AnalysisResult>> getAnalysisResults(
             @PathVariable Long datasetId,
-            @PathVariable String symbol) {
-        List<AnalysisResult> results = financialAnalysisService
-                .getAnalysisResults(datasetId, symbol);
-        List<AnalysisResultDTO> dtos = convertToDTOs(results);
-        return ResponseEntity.ok(dtos);
-    }
-
-    private List<AnalysisResult> runRequestedAnalyses(AnalysisRequestDTO request) {
-        List<AnalysisResult> allResults = new ArrayList<>();
-
-        for (String indicator : request.getIndicators()) {
-            switch (indicator.toUpperCase()) {
-                case "SMA":
-                    allResults.addAll(financialAnalysisService.calculateSMA(
-                            request.getDatasetId(), request.getSymbol(),
-                            request.getPeriod() != null ? request.getPeriod() : 20
-                    ));
-                    break;
-                case "RSI":
-                    allResults.addAll(financialAnalysisService.calculateRSI(
-                            request.getDatasetId(), request.getSymbol(),
-                            request.getPeriod() != null ? request.getPeriod() : 14
-                    ));
-                    break;
-                case "MACD":
-                    allResults.addAll(financialAnalysisService.calculateMACD(
-                            request.getDatasetId(), request.getSymbol()
-                    ));
-                    break;
-            }
-        }
-
-        return allResults;
-    }
-
-    private List<AnalysisResultDTO> convertToDTOs(List<AnalysisResult> results) {
-        return results.stream().map(this::convertToDTO).collect(Collectors.toList());
-    }
-
-    private AnalysisResultDTO convertToDTO(AnalysisResult result) {
-        AnalysisResultDTO dto = new AnalysisResultDTO();
-        dto.setAnalysisType(result.getAnalysisType());
-        dto.setDate(result.getResultDate());
-        dto.setSignal(result.getSignal());
-        dto.setSymbol(result.getSymbol());
-
+            @RequestParam String symbol) {
         try {
-            Object value = new ObjectMapper().readValue(result.getResultValue(), Object.class);
-            dto.setValue(value);
-        } catch (Exception e) {
-            dto.setValue(result.getResultValue());
-        }
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("User {} fetching analysis results for dataset {} symbol {}",
+                    authentication.getName(), datasetId, symbol);
 
-        return dto;
+            List<AnalysisResult> results = financialAnalysisService.getAnalysisResults(datasetId, symbol);
+
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .result(results)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error fetching analysis results for dataset {} symbol {}: {}",
+                    datasetId, symbol, e.getMessage());
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .code(400)
+                    .message("Error fetching analysis results: " + e.getMessage())
+                    .build();
+        }
     }
 
-    private RecommendationDTO convertToDTO(Recommendation recommendation) {
-        RecommendationDTO dto = new RecommendationDTO();
-        dto.setSymbol(recommendation.getSymbol());
-        dto.setRecommendation(recommendation.getFinalRecommendation());
-        dto.setConfidenceScore(recommendation.getConfidenceScore());
-        dto.setReasoning(recommendation.getReasoning());
-
+    @PostMapping("/{datasetId}/sma")
+    public ApiResponse<List<AnalysisResult>> calculateSMA(
+            @PathVariable Long datasetId,
+            @RequestParam String symbol,
+            @RequestParam(defaultValue = "14") int period) {
         try {
-            Object summary = new ObjectMapper().readValue(recommendation.getAnalysisSummary(), Object.class);
-            dto.setAnalysisSummary(summary);
-        } catch (Exception e) {
-            dto.setAnalysisSummary(recommendation.getAnalysisSummary());
-        }
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("User {} calculating SMA for dataset {} symbol {} period {}",
+                    authentication.getName(), datasetId, symbol, period);
 
-        return dto;
+            List<AnalysisResult> results = financialAnalysisService.calculateSMA(datasetId, symbol, period);
+
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .result(results)
+                    .message("SMA calculation completed successfully")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating SMA for dataset {} symbol {} period {}: {}",
+                    datasetId, symbol, period, e.getMessage());
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .code(400)
+                    .message("Error calculating SMA: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    @PostMapping("/{datasetId}/rsi")
+    public ApiResponse<List<AnalysisResult>> calculateRSI(
+            @PathVariable Long datasetId,
+            @RequestParam String symbol,
+            @RequestParam(defaultValue = "14") int period) {
+        try {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("User {} calculating RSI for dataset {} symbol {} period {}",
+                    authentication.getName(), datasetId, symbol, period);
+
+            List<AnalysisResult> results = financialAnalysisService.calculateRSI(datasetId, symbol, period);
+
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .result(results)
+                    .message("RSI calculation completed successfully")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating RSI for dataset {} symbol {} period {}: {}",
+                    datasetId, symbol, period, e.getMessage());
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .code(400)
+                    .message("Error calculating RSI: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    @PostMapping("/{datasetId}/macd")
+    public ApiResponse<List<AnalysisResult>> calculateMACD(
+            @PathVariable Long datasetId,
+            @RequestParam String symbol) {
+        try {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("User {} calculating MACD for dataset {} symbol {}",
+                    authentication.getName(), datasetId, symbol);
+
+            List<AnalysisResult> results = financialAnalysisService.calculateMACD(datasetId, symbol);
+
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .result(results)
+                    .message("MACD calculation completed successfully")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating MACD for dataset {} symbol {}: {}",
+                    datasetId, symbol, e.getMessage());
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .code(400)
+                    .message("Error calculating MACD: " + e.getMessage())
+                    .build();
+        }
+    }
+
+    @PostMapping("/{datasetId}/all")
+    public ApiResponse<List<AnalysisResult>> calculateAllIndicators(
+            @PathVariable Long datasetId,
+            @RequestParam String symbol,
+            @RequestParam(defaultValue = "14") int period) {
+        try {
+            var authentication = SecurityContextHolder.getContext().getAuthentication();
+            log.info("User {} calculating all indicators for dataset {} symbol {} period {}",
+                    authentication.getName(), datasetId, symbol, period);
+
+            // Tính tất cả các chỉ báo
+            List<AnalysisResult> smaResults = financialAnalysisService.calculateSMA(datasetId, symbol, period);
+            List<AnalysisResult> rsiResults = financialAnalysisService.calculateRSI(datasetId, symbol, period);
+            List<AnalysisResult> macdResults = financialAnalysisService.calculateMACD(datasetId, symbol);
+
+            // Kết hợp tất cả kết quả
+            List<AnalysisResult> allResults = new ArrayList<>();
+            allResults.addAll(smaResults);
+            allResults.addAll(rsiResults);
+            allResults.addAll(macdResults);
+
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .result(allResults)
+                    .message("All indicators calculated successfully")
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error calculating all indicators for dataset {} symbol {}: {}",
+                    datasetId, symbol, e.getMessage());
+            return ApiResponse.<List<AnalysisResult>>builder()
+                    .code(400)
+                    .message("Error calculating indicators: " + e.getMessage())
+                    .build();
+        }
     }
 }

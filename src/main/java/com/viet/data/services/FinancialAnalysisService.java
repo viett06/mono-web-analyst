@@ -5,9 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.viet.data.entity.AnalysisResult;
 import com.viet.data.entity.Dataset;
 import com.viet.data.entity.StockData;
+import com.viet.data.entity.User;
+import com.viet.data.exception.AppException;
+import com.viet.data.exception.ErrorCode;
 import com.viet.data.repository.AnalysisResultRepository;
+import com.viet.data.repository.DatasetRepository;
 import com.viet.data.repository.StockDataRepository;
+import com.viet.data.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -28,19 +35,43 @@ public class FinancialAnalysisService {
     private AnalysisResultRepository analysisResultRepository;
 
     @Autowired
-    private ObjectMapper objectMapper;
+    private DatasetRepository datasetRepository;
 
-    public List<AnalysisResult> getAnalysisResults(Long datasetId, String symbol) {
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private UserRepository userRepository;
+
+    // Kiểm tra quyền truy cập dataset
+    private void validateDatasetAccess( Long datasetId) {
+        Dataset dataset = datasetRepository.findById(datasetId)
+                .orElseThrow(() -> new AppException(ErrorCode.DATASET_NOT_FOUND));
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        User user = userRepository.findByUsername(authentication.getName()).orElseThrow(()->new AppException(ErrorCode.USER_NOT_EXISTED));
+
+        if (!dataset.getUser().getId().equals(user.getId())) {
+            throw new AppException(ErrorCode.ACCESS_DENIED);
+        }
+    }
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public List<AnalysisResult> getAnalysisResults( Long datasetId, String symbol) {
+        validateDatasetAccess( datasetId);
         return analysisResultRepository.findByDatasetIdAndSymbolOrderByResultDateAsc(datasetId, symbol);
     }
-
-
-    public List<AnalysisResult> calculateSMA(Long datasetId, String symbol, int period) {
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public List<AnalysisResult> calculateSMA( Long datasetId, String symbol, int period) {
+        validateDatasetAccess( datasetId);
         List<StockData> stockDataList = stockDataRepository.findByDatasetIdAndSymbolOrderByDateAsc(datasetId, symbol);
+
+        if (stockDataList.isEmpty()) {
+            throw new AppException(ErrorCode.NO_DATA_FOUND);
+        }
+
         List<AnalysisResult> results = new ArrayList<>();
 
         for (int i = period - 1; i < stockDataList.size(); i++) {
             BigDecimal sum = BigDecimal.ZERO;
+            // cua so truot
             for (int j = i - period + 1; j <= i; j++) {
                 sum = sum.add(stockDataList.get(j).getClosePrice());
             }
@@ -55,13 +86,14 @@ public class FinancialAnalysisService {
 
         return analysisResultRepository.saveAll(results);
     }
-
-    public List<AnalysisResult> calculateRSI(Long datasetId, String symbol, int period) {
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public List<AnalysisResult> calculateRSI( Long datasetId, String symbol, int period) {
+        validateDatasetAccess( datasetId);
         List<StockData> stockDataList = stockDataRepository.findByDatasetIdAndSymbolOrderByDateAsc(datasetId, symbol);
         List<AnalysisResult> results = new ArrayList<>();
 
         if (stockDataList.size() <= period) {
-            return results;
+            throw new AppException(ErrorCode.INSUFFICIENT_DATA);
         }
 
         List<BigDecimal> gains = new ArrayList<>();
@@ -102,9 +134,15 @@ public class FinancialAnalysisService {
 
         return analysisResultRepository.saveAll(results);
     }
-
-    public List<AnalysisResult> calculateMACD(Long datasetId, String symbol) {
+    @PreAuthorize("hasRole('USER') or hasRole('ADMIN')")
+    public List<AnalysisResult> calculateMACD( Long datasetId, String symbol) {
+        validateDatasetAccess(datasetId);
         List<StockData> stockDataList = stockDataRepository.findByDatasetIdAndSymbolOrderByDateAsc(datasetId, symbol);
+
+        if (stockDataList.size() < 35) { // Cần ít nhất 35 ngày cho MACD
+            throw new AppException(ErrorCode.INSUFFICIENT_DATA);
+        }
+
         List<AnalysisResult> results = new ArrayList<>();
 
         // Calculate EMAs
@@ -137,6 +175,7 @@ public class FinancialAnalysisService {
 
         return analysisResultRepository.saveAll(results);
     }
+
 
     private List<BigDecimal> calculateEMA(List<StockData> stockData, int period) {
         List<BigDecimal> emaValues = new ArrayList<>();
@@ -231,5 +270,4 @@ public class FinancialAnalysisService {
         int compare = macd.compareTo(signal);
         return compare > 0 ? "BUY" : compare < 0 ? "SELL" : "HOLD";
     }
-
 }
