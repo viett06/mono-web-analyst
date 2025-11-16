@@ -49,8 +49,6 @@ public class AuthenticationService {
     @Autowired
     private InvalidatedTokenRepository invalidatedTokenRepository;
 
-    //@Autowired
-    //private PasswordEncoder passwordEncoder;
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         log.info("SignKey: {}", SINGER_KEY);
         User user = userRepository.findByUsername(request.getName()).orElseThrow(() -> new AppException(ErrorCode.USER_NOT_EXISTED));

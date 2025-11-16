@@ -20,8 +20,8 @@ import org.springframework.web.filter.CorsFilter;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
-    private static final String[] PUBLIC_POST_ENDPOINTS = {"/users","/auth/log-in","/auth/introspect","/auth/logout","/auth/refresh"};
-    private static final String[] PUBLIC_GET_ENDPOINTS ={"/product","/product/getall","/product/search","/inventory","/category"};
+    private static final String[] PUBLIC_POST_ENDPOINTS = {"/api/users","/api/auth/log-in","/api/auth/introspect","/api/auth/logout","/api/auth/refresh"};
+    private static final String[] PUBLIC_GET_ENDPOINTS ={};
 
     private final CustomJwtDecoder customJwtDecoder;
 

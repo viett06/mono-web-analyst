@@ -10,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class UpdateUser {
-    private String userName;
+    private String username;
     private String email;
     private String password;
     private List<String> roles;

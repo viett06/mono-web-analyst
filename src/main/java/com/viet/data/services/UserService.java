@@ -82,7 +82,7 @@ public class UserService {
     @PreAuthorize("hasRole('ADMIN')")
     public UserResponse updateUserByAdmin(Long userId, UpdateUser userUpdateRequest){
         User user = userRepository.findById(userId).orElseThrow(()-> new AppException(USER_NOT_EXISTED));
-        if (userRepository.findByUsername(userUpdateRequest.getUserName()).isPresent()) {
+        if (userRepository.findByUsername(userUpdateRequest.getUsername()).isPresent()) {
             throw new AppException(USERNAME_ALREADY_EXISTS);
         }
 
@@ -95,7 +95,7 @@ public class UserService {
     @Transactional
     public UserResponse updateUser(Long userId, UpdateUser userUpdateRequest){
         User user = userRepository.findById(userId).orElseThrow(()-> new AppException(USER_NOT_EXISTED));
-        if (userRepository.findByUsername(userUpdateRequest.getUserName()).isPresent()) {
+        if (userRepository.findByUsername(userUpdateRequest.getUsername()).isPresent()) {
             throw new AppException(USERNAME_ALREADY_EXISTS);
         }
         userMapper.updateUser(user,userUpdateRequest);
